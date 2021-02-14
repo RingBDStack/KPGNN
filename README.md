@@ -18,7 +18,7 @@ The filtered dataset contains 10,242 messages related to 154 event classes.
 Please find the original dataset at https://github.com/THU-KEG/MAVEN-dataset
 
 ## Data format and usage
-Please refer to this document for data format and usage.
+Please refer to [this document](https://github.com/RingBDStack/KPGNN/blob/main/datasets/data_usage.md) for data format and usage.
 
 # Baselines
 Coming soon.
