@@ -17,10 +17,8 @@ import pandas as pd
 import en_core_web_lg
 from datetime import datetime
 
-#load_path = './datasets/Twitter/'
-#save_path = './'
-save_path = '/Users/yuwei/Desktop/'
-load_path = '/Users/yuwei/Downloads/0603/'
+load_path = './datasets/Twitter/'
+save_path = './'
 
 # load dataset
 p_part1 = load_path + '68841_tweets_multiclasses_filtered_0722_part1.npy'
