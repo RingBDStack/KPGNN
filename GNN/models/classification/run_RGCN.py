@@ -35,9 +35,9 @@ def main(args):
     category = dataset.predict_category
     num_classes = dataset.num_classes
     train_mask = g.nodes[category].data.pop("train_mask")
-    test_mask = g.nodes[category].data.pop("test_mask")
+    # test_mask = g.nodes[category].data.pop("test_mask")
     train_idx = th.nonzero(train_mask, as_tuple=False).squeeze()
-    test_idx = th.nonzero(test_mask, as_tuple=False).squeeze()
+    # test_idx = th.nonzero(test_mask, as_tuple=False).squeeze()
     labels = g.nodes[category].data.pop("labels")
 
     category_id = len(g.ntypes)
@@ -120,10 +120,10 @@ def main(args):
 
     model.eval()
     logits = model.forward()[category]
-    test_loss = F.cross_entropy(logits[test_idx], labels[test_idx])
+    test_loss = F.cross_entropy(logits[val_idx], labels[val_idx])
     test_acc = th.sum(
-        logits[test_idx].argmax(dim=1) == labels[test_idx]
-    ).item() / len(test_idx)
+        logits[val_idx].argmax(dim=1) == labels[val_idx]
+    ).item() / len(val_idx)
     print(
         "Test Acc: {:.4f} | Test loss: {:.4f}".format(
             test_acc, test_loss.item()

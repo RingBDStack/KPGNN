@@ -3,9 +3,11 @@ GNN/__pycache__/
 *.pyc
 KPGNN/incremental_test_100messagesperday/
 GNN/incremental_graph/
+GNN/models/classification/incremental_graph/
 GNN/models/clustering/incremental_graph
 GNN/models/clustering/HAN/incremental_graph
 GNN/models/clustering/HAN/models
 GNN/models/clustering/models
 datasets/Twitter/features_69612_0709_spacy_lg_zero_multiclasses_filtered.npy
 GNN/checkpoints/
+GNN/models/clustering/exp*

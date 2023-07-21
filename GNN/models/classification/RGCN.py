@@ -327,6 +327,7 @@ class RelGraphEmbed_Pretrain(nn.Module):
         for ntype in g.ntypes:
             embed = None
             if ntype != "user":
+                print(ntype, g.nodes[ntype].data["features"].shape[1])
                 embed = nn.Linear(g.nodes[ntype].data["features"].shape[1], embed_size)
             else:
                 embed = nn.Parameter(th.Tensor(g.num_nodes(ntype), self.embed_size))
@@ -351,6 +352,7 @@ class RelGraphEmbed_Pretrain(nn.Module):
         """
         h = {}
         for ntype in self.embeds:
+            print(ntype)
             if ntype != "user":
                 h[ntype] = self.embeds[ntype](self.g.nodes[ntype].data["features"])
             else:

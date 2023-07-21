@@ -101,6 +101,15 @@ class TwitterDataset(DGLBuiltinDataset):
                 G.nodes[each]['shift'] = shift
                 G.nodes[each]['features'] = nlp(row['words'][shift]).vector
             
+            entities = row['entities']
+            entities = list(set(['e_' + str(each) for each in entities]))
+            G.add_nodes_from(entities)
+            for shift, each in enumerate(entities):
+                G.nodes[each]['type'] = 'entity'
+                G.nodes[each]['origin_index'] = ind
+                G.nodes[each]['shift'] = shift
+                G.nodes[each]['features'] = nlp(' '.join(row['entities'][shift])).vector
+            
             # loc = 'l_' + row['user_loc']
             # G.add_node(loc)
             # G.node[loc]['location']=True
@@ -108,6 +117,7 @@ class TwitterDataset(DGLBuiltinDataset):
             uid = user_ids[-1]
             edges = []
             edges += [(tid, each) for each in user_ids]
+            edges += [(tid, each) for each in entities]
             edges += [(uid, each) for each in user_ids[:-1]]
             edges += [(tid, each) for each in hashtags]
             edges += [(tid, each) for each in words]
@@ -156,15 +166,17 @@ class TwitterDataset(DGLBuiltinDataset):
         user_nodes = [each for each in all_nodes if G.nodes[each]["type"]=="user"]
         hashtag_nodes = [each for each in all_nodes if G.nodes[each]["type"]=="hashtag"]
         word_nodes = [each for each in all_nodes if G.nodes[each]["type"]=="word"]
+        entity_nodes = [each for each in all_nodes if G.nodes[each]["type"]=="entity"]
 
         tweet_features = np.array([G.nodes[each]["features"] for each in tweet_nodes])
         user_features = np.array([G.nodes[each]["features"] for each in user_nodes])
         hashtag_features = np.array([G.nodes[each]["features"] for each in hashtag_nodes])
         word_features = np.array([G.nodes[each]["features"] for each in word_nodes])
-        features = {"tweet": tweet_features, "user": user_features, "hashtag": hashtag_features, "word": word_features}
+        entity_features = np.array([G.nodes[each]["features"] for each in entity_nodes])
+        features = {"tweet": tweet_features, "user": user_features, "hashtag": hashtag_features, "word": word_features, "entity": entity_features}
         labels = np.array([G.nodes[each]["label"] for each in tweet_nodes])
         
-        nodes_type = {"tweet": tweet_nodes, "user": user_nodes, "hashtag": hashtag_nodes, "word": word_nodes}
+        nodes_type = {"tweet": tweet_nodes, "user": user_nodes, "hashtag": hashtag_nodes, "word": word_nodes, "entity": entity_nodes}
         mins = (time() - start) / 60
         print('\tDone. Time elapsed: ', mins, ' mins\n')
         message += '\tDone. Time elapsed: '
@@ -175,7 +187,8 @@ class TwitterDataset(DGLBuiltinDataset):
         message += '\tInterating edges to generate dictionary for heterograph ...\n'
         start = time()
         relation_lookup = {("tweet", "user"): "t-u", ("user", "user"): "u-u", ("tweet", "hashtag"): "t-h", ("tweet", "word"): "t-w",\
-                           ("user", "tweet"): "u-t", ("hashtag", "tweet"): "h-t", ("word", "tweet"): "w-t"}
+                           ("user", "tweet"): "u-t", ("hashtag", "tweet"): "h-t", ("word", "tweet"): "w-t",
+                             ("tweet", "entity"): "t-e", ("entity", "tweet"): "e-t"}
         for edge in all_edges:
             hnode, tnode = edge
             htype = G.nodes[hnode]["type"]
@@ -207,6 +220,7 @@ class TwitterDataset(DGLBuiltinDataset):
 
         mins = (time() - all_start) / 60
         print('Done DGL graph construction. Time elapsed: ', mins, ' mins\n')
+        print("DGL Graph: ", dgl_graph)
         
         return dgl_graph
 
@@ -253,6 +267,7 @@ class TwitterDataset(DGLBuiltinDataset):
         graphs, _ = dgl.load_graphs(graph_path)
         self._g = graphs[0]
         self.num_classes = 506
+        print(self._g)
 
     def has_cache(self):
         # 检查在 `self.save_path` 里是否有处理过的数据文件
