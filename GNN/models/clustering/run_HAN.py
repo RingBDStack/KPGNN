@@ -124,8 +124,9 @@ def train_process(args, split):
         raise ValueError()
 
     g = dataset[0]
+    print(g.number_of_nodes(), g.number_of_edges())
     category = dataset.predict_category
-    metapath_list = [["t-u", "u-t"], ["t-w", "w-t"], ["t-h", "h-t"]]
+    metapath_list = [["t-u", "u-t"], ["t-w", "w-t"], ["t-h", "h-t"], ["t-e", "e-t"]]
     # print(g.number_of_nodes())
     if g.number_of_nodes() < 10:
         return
@@ -137,6 +138,8 @@ def train_process(args, split):
     labels = g.nodes[category].data.pop("labels")
     t_features = g.nodes[category].data["features"].to(th.float32)
     save_path = os.path.join(args.save_path, "HAN")
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
 
     category_id = len(g.ntypes)
     for i, ntype in enumerate(g.ntypes):
@@ -296,7 +299,7 @@ def infer_process(args, split):
 
     g = dataset[0]
     category = dataset.predict_category
-    metapath_list = [["t-u", "u-t"], ["t-w", "w-t"], ["t-h", "h-t"]]
+    metapath_list = [["t-u", "u-t"], ["t-w", "w-t"], ["t-h", "h-t"], ["t-e", "e-t"]]
     # print(g.number_of_nodes())
     if g.number_of_nodes() < 10:
         return
@@ -409,7 +412,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_hardest_neg", default=True, action="store_true", help="whether to use hardest negative in triplet selection")
     parser.add_argument("--batch-size", type=int, default=32, help="Mini-batch size. If -1, use full graph training.",    )
     parser.add_argument("--patience", type=int, default=10, help="Patience for early stopping.")
-    parser.add_argument("--save_path", type=str, default=None, help="Path to save model and results")
+    parser.add_argument("--save_path", type=str, default='.', help="Path to save model and results")
     parser.add_argument("--num_neighbors", type=int, default=20)
     fp = parser.add_mutually_exclusive_group(required=False)
     fp.add_argument("--validation", dest="validation", action="store_true")

@@ -126,7 +126,6 @@ class HANLayer(torch.nn.Module):
 
     def forward(self, block_list, h_list):
         semantic_embeddings = []
-        print(block_list)
         for i, block in enumerate(block_list):
             semantic_embeddings.append(
                 self.gat_layers[i](block, h_list[i]).flatten(1)
