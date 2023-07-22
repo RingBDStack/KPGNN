@@ -123,3 +123,24 @@ def HardestNegativeTripletSelector(margin, cpu=False): return FunctionNegativeTr
 def RandomNegativeTripletSelector(margin, cpu=False): return FunctionNegativeTripletSelector(margin=margin,
                                                                                              negative_selection_fn=random_hard_negative,
                                                                                              cpu=cpu)
+
+class ClusterLoss(nn.Module):
+
+    def __init__(self, alpha):
+        super(ClusterLoss, self).__init__()
+        self.alpha = alpha
+
+    def forward(self, embeddings, centers):
+        # Input: node embeddings, corresponding centers, alpha
+        embeddings = embeddings.cpu().detach()
+        alpha = self.alpha
+        Q = (1 + torch.sum(torch.pow(embeddings.unsqueeze(1) - centers, 2),2) / alpha)**(-1*(alpha+1)/2)
+        Q = (Q.t() / torch.sum(Q, 1)).t()
+        weight = Q**2 / Q.sum(0)
+        P = (weight.t() / weight.sum(1)).t()
+        if embeddings.is_cuda:
+            triplets = triplets.cuda()
+
+        loss = F.kl_div(Q.log(), P, reduction='batchmean')
+
+        return loss

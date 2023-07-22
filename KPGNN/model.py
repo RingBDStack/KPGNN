@@ -177,8 +177,7 @@ class KPGNN():
                 model.train()
                 # forward
                 if args.use_dgi:
-                    pred, ret = model(
-                        nf)  # pred: representations of the sampled nodes (in the last layer of the NodeFlow), ret: discriminator results
+                    pred, ret = model(nf)  # pred: representations of the sampled nodes (in the last layer of the NodeFlow), ret: discriminator results
                 else:
                     pred = model(nf)  # Representations of the sampled nodes (in the last layer of the NodeFlow).
                 batch_nids = nf.layer_parent_nid(-1).to(device=pred.device, dtype=torch.long)

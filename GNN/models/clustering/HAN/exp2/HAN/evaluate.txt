@@ -1,0 +1,29 @@
+
+Epoch 0
+	Number of validation tweets: 4032
+	Number of classes covered by validation tweets: 49
+	validation NMI: 0.13932835557601075
+Epoch 1
+	Number of validation tweets: 4032
+	Number of classes covered by validation tweets: 49
+	validation NMI: 0.1768532319434188
+Epoch 2
+	Number of validation tweets: 4032
+	Number of classes covered by validation tweets: 49
+	validation NMI: 0.15969603843457147
+Epoch 3
+	Number of validation tweets: 4032
+	Number of classes covered by validation tweets: 49
+	validation NMI: 0.10978014089393491
+Epoch 4
+	Number of validation tweets: 4032
+	Number of classes covered by validation tweets: 49
+	validation NMI: 0.10359374427511257
+Epoch 5
+	Number of validation tweets: 4032
+	Number of classes covered by validation tweets: 49
+	validation NMI: 0.08441074562454187
+Epoch 6
+	Number of validation tweets: 4032
+	Number of classes covered by validation tweets: 49
+	validation NMI: 0.08307304371697229
