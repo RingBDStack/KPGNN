@@ -140,26 +140,26 @@ class HANLayer(torch.nn.Module):
 
 class HAN(nn.Module):
     def __init__(
-        self, g, num_metapath, embed_size, hidden_size, out_size, num_heads, dropout
+        self, g, num_metapath, embed_size, hidden_size, out_size, num_heads, num_layer, dropout
     ):
         super(HAN, self).__init__()
 
         self.layers = nn.ModuleList()
         # self.embed_layer=RelGraphEmbed_Pretrain(g, embed_size)
         self.layers.append(
-            HANLayer(num_metapath, embed_size, hidden_size, num_heads[0], dropout)
+            HANLayer(num_metapath, embed_size, hidden_size, num_heads, dropout)
         )
-        for l in range(1, len(num_heads)):
+        for l in range(1, num_layer-1):
             self.layers.append(
                 HANLayer(
                     num_metapath,
-                    hidden_size * num_heads[l - 1],
+                    hidden_size * num_heads,
                     hidden_size,
-                    num_heads[l],
+                    num_heads,
                     dropout,
                 )
             )
-        self.predict = nn.Linear(hidden_size * num_heads[-1], out_size)
+        self.predict = nn.Linear(hidden_size * num_heads, out_size) # 占一个
 
     def forward(self, g, h):
         # h = self.embed_layer(g)
