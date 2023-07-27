@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import dgl.dataloading
+from dgl.dataloading import MultiLayerNeighborSampler, NodeCollator
 from datasets.dgl_dataset import TwitterDataset
 from models.HAN import HAN, HANSampler
 from utils.metrics import AverageNonzeroTripletsMetric
@@ -15,6 +16,8 @@ from utils.loss import OnlineTripletLoss, HardestNegativeTripletSelector, Random
 import itertools
 from utils.clusters import run_kmeans, run_kmeans_in_train, run_hdbscan, run_hdbscan_in_train, run_dbscan, run_dbscan_in_train
 from torch.utils.data import DataLoader
+from utils.metapath import to_ntype_list, metapath_based_graph
+from models.MAGNN import ENCODERS, MAGNNMinibatch
 
 def load_subtensors(blocks, features):
     h_list = []
@@ -39,6 +42,48 @@ def extract_graph_features(g, model, category, labels):
 
     return extract_nids, extract_features, extract_labels
 
+def get_feature_lbl(inputs, model, node_features, labels, device, collators=None):
+    if args.model == "HAN":
+        seeds, blocks = inputs
+        h_list = load_subtensors(blocks, node_features)
+        blocks = [block.to(device) for block in blocks]
+        hs = [h.to(device) for h in h_list]
+        features = model(blocks, hs)
+        lbl = labels[seeds].to(device)
+    elif args.model == "MAGNN":
+        batch = inputs
+        gs = [collator.collate(batch)[2][0] for collator in collators]
+        features = model(gs, node_features)
+        lbl = labels[batch].to(device)
+    return features, lbl
+def train_once(args, model, loader, g, node_features, 
+          labels,
+          tr_loss_fn, kl_loss_fn, optimizer, metrics,
+          epoch, 
+          device="cpu", collators=None):
+    for i, inputs in enumerate(loader):   
+        # print("Seeds: {}, Blocks: {}".format(len(seeds), blocks))
+        batch_tic = time.time()
+        features, lbl = get_feature_lbl(inputs, model, node_features, labels, 
+                                        device, collators)
+        print(f"Features: {features.shape}")
+        n_tweets, n_classes, centers, nmi = run_kmeans_in_train(features, lbl)
+        tr_loss = tr_loss_fn(features, lbl)
+        kl_loss = kl_loss_fn(features, centers)
+        loss = tr_loss[0] + 10 * kl_loss
+        for metric in metrics:
+            metric(features, lbl, tr_loss)
+        optimizer.zero_grad()
+        loss.backward(retain_graph=True)
+        optimizer.step()
+        for metric in metrics:
+            print('\t{}: {:.4f}'.format(metric.name(), metric.value()))
+        print(
+            "Epoch {:05d} | Batch {:03d} | {}: {:.4f} | TR Loss: {:.4f} | KL Loss: {:.4f} | Train Loss: {:.4f} | Train NMI: {:.4f} | Time: {:.4f}".format(
+                epoch, i, metrics[0].name(), metrics[0].value(), tr_loss[0], kl_loss*10, loss.item(), nmi.item(), time.time() - batch_tic
+            )
+        )
+
 def evaluate(args, model,
     g,
     t_features,
@@ -50,7 +95,7 @@ def evaluate(args, model,
     save_path,
     device="cpu"):
     model.eval()
-    loader = construct_loader(args, g, device, val_nid)
+    loader, collators = construct_loader(args, g, device, val_nid)
     message = ''
     message += '\nEpoch '
     message += str(epoch)
@@ -58,16 +103,8 @@ def evaluate(args, model,
     extract_features = []
     extract_labels = []
     with th.no_grad():
-        for step, (seeds, blocks) in enumerate(loader):
-            h_list = load_subtensors(blocks, t_features) # 获取到对应的初始feature
-            blocks = [block for block in blocks]
-            hs = [h for h in h_list]
-            blocks = [block.to(device) for block in blocks]
-            hs = [h.to(device) for h in h_list]
-
-            features = model(blocks, hs)
-            labels_batch = labels[np.asarray(seeds)].cpu().numpy()
-
+        for step, inputs in enumerate(loader):
+            features, labels_batch = get_feature_lbl(inputs, model, t_features, labels, device, collators)
             extract_features.append(features.cpu().numpy())
             extract_labels.append(labels_batch)
     
@@ -93,13 +130,13 @@ def evaluate(args, model,
 
     return nmi
 
-def construct_model(args, graph, init_dim=0):
+def construct_model(args, graph, category="tweet", init_dim=0):
     model = None
     model_type = args.model
+    metapath_list = [["t-u", "u-t"], ["t-w", "w-t"], ["t-h", "h-t"], ["t-e", "e-t"]]
     if model_type == "HAN":
         if init_dim == 0:
             raise ValueError("Init-dim of target nodes must be specified when using model HAN. ")
-        metapath_list = [["t-u", "u-t"], ["t-w", "w-t"], ["t-h", "h-t"], ["t-e", "e-t"]]
         model = HAN(
             graph,
             num_metapath=len(metapath_list),
@@ -110,15 +147,36 @@ def construct_model(args, graph, init_dim=0):
             dropout=args.dropout,
             num_layer=args.n_layers
         )
+    elif model_type == "MAGNN":
+        metapaths_ntype = [to_ntype_list(graph, metapath) for metapath in metapath_list]
+        model = MAGNNMinibatch(
+            graph,
+            ntype=category,
+            metapaths=metapaths_ntype,
+            in_dims={type: graph.nodes[type].data['features'].shape[1]
+                    for type in graph.ntypes},
+            hidden_dim=args.n_hidden,
+            embed_size=init_dim,
+            out_dim=args.n_output,
+            num_heads=args.n_heads,
+            encoder=args.encoder,
+            dropout=args.dropout,
+        )
     else:
         raise ValueError("Unimplemented model.")
     return model
 
 def construct_loader(args, g, device, seeds):
     loader = None
-    sampler_type = args.sampler
-    if sampler_type == "RandomWalk":
-        metapath_list = [["t-u", "u-t"], ["t-w", "w-t"], ["t-h", "h-t"], ["t-e", "e-t"]]
+    collators = None
+    sampler_type = args.model
+    metapath_list = [["t-u", "u-t"], ["t-w", "w-t"], ["t-h", "h-t"], ["t-e", "e-t"]]
+    # metapath_dict = {"tweet": [["t-u", "u-t"], ["t-u", "u-u", "u-t"], ["t-w", "w-t"], ["t-h", "h-t"], ["t-e", "e-t"]],
+    #                  "user": [["u-t", "t-u"], ["u-u"]],
+    #                  "word": [["w-t", "t-w"]],
+    #                  "hashtag": [["h-t", "t-h"]],
+    #                  "entity": [["e-t", "t-e"]]}
+    if sampler_type == "HAN":
         num_neighbors = args.num_neighbors
         han_sampler = HANSampler(g, metapath_list, num_neighbors, device=device)
         loader = DataLoader(
@@ -129,11 +187,15 @@ def construct_loader(args, g, device, seeds):
             drop_last=True,
             num_workers=0,
         )
-    elif sampler_type == "MNeighbor":
-        pass
+    elif sampler_type == "MAGNN":
+        mgs = [metapath_based_graph(g, metapath) for metapath in metapath_list]
+        mgs[0].ndata['feat'] = g.nodes['tweet'].data['features']
+        sampler = MultiLayerNeighborSampler([args.fanout])
+        collators = [NodeCollator(mg, seeds, sampler) for mg in mgs]
+        loader = DataLoader(seeds, batch_size=args.batch_size, shuffle=True, drop_last=True)
     else:
         raise ValueError("Unimplemented dataloader.")
-    return loader
+    return loader, collators
 
 
 def train_process(args, split):
@@ -152,6 +214,10 @@ def train_process(args, split):
     train_idx = th.nonzero(train_mask, as_tuple=False).squeeze()
     labels = g.nodes[category].data.pop("labels")
     t_features = g.nodes[category].data["features"].to(th.float32)
+    node_features = {ntype: g.nodes[ntype].data["features"].to(th.float32) for ntype in g.ntypes}
+    if not args.model == "MAGNN":
+        node_features = t_features
+    
     save_path = args.save_path
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -169,7 +235,7 @@ def train_process(args, split):
     if use_cuda:
         device = "cuda:%d" % args.gpu
 
-    loader = construct_loader(args, g, device, train_idx)
+    loader, collators = construct_loader(args, g, device, train_idx)
     
     # create model
     # meta_paths, in_size, hidden_size, out_size, num_heads, dropout
@@ -220,40 +286,14 @@ def train_process(args, split):
     # record validation nmi of all epochs before early stop
     all_vali_nmi = []
     for epoch in range(args.n_epochs):
-        for i, (seeds, blocks) in enumerate(loader):   
-            # print("Seeds: {}, Blocks: {}".format(len(seeds), blocks))
-            h_list = load_subtensors(blocks, t_features)
-            blocks = [block.to(device) for block in blocks]
-            hs = [h.to(device) for h in h_list]
-            batch_tic = time.time()
-            lbl = labels[seeds]
-            if use_cuda:
-                lbl = lbl.cuda()
-            features = model(blocks, hs)
-            # n_tweets, n_classes, centers, nmi = run_kmeans_in_train(features, lbl)
-            n_tweets, n_classes, centers, nmi = run_kmeans_in_train(features, lbl)
-            tr_loss = tr_loss_fn(features, lbl)
-            kl_loss = kl_loss_fn(features, centers)
-            loss = tr_loss[0] + 10 * kl_loss
-            for metric in metrics:
-                metric(features, lbl, tr_loss)
-
-            optimizer.zero_grad()
-            loss.backward(retain_graph=True)
-            optimizer.step()
-            for metric in metrics:
-                print('\t{}: {:.4f}'.format(metric.name(), metric.value()))
-            print(
-                "Epoch {:05d} | Batch {:03d} | {}: {:.4f} | TR Loss: {:.4f} | KL Loss: {:.4f} | Train Loss: {:.4f} | Train NMI: {:.4f} | Time: {:.4f}".format(
-                    epoch, i, metrics[0].name(), metrics[0].value(), tr_loss[0], kl_loss*10, loss.item(), nmi.item(), time.time() - batch_tic
-                )
-            )
-        
+        train_once(args, model, loader, g, node_features, labels, 
+                   tr_loss_fn, kl_loss_fn, optimizer, metrics,
+                   epoch, device=device, collators=collators)
         val_nmi = evaluate(
             args, 
             model,
             g,
-            t_features,
+            node_features,
             labels,
             val_idx,
             args.batch_size,
@@ -404,8 +444,7 @@ if __name__ == "__main__":
     parser.add_argument("--n-embed", type=int, default=16, help="dim of embedding")
     parser.add_argument("--n-heads", type=int, default=8, help="number of attention heads",)
     parser.add_argument('--attn-vec-dim', type=int, default=128, help='Dimension of the attention vector. Default is 128.')
-    parser.add_argument('--rnn-type', default='RotatE0', help='Type of the aggregator. Default is RotatE0.')
-    
+    parser.add_argument('--encoder', default='linear', choices=["linear", "means"], help='Type of the aggregator. Default is Linear.')
     # 训练相关
     parser.add_argument("--dropout", type=float, default=0, help="dropout probability")
     parser.add_argument("-e", "--n-epochs", type=int, default=200, help="number of training epochs")
@@ -414,8 +453,8 @@ if __name__ == "__main__":
     parser.add_argument("--gpu", type=int, default=-1, help="gpu")
     parser.add_argument("--batch-size", type=int, default=100, help="Mini-batch size. If -1, use full graph training.",    )
     parser.add_argument("--num_neighbors", type=int, default=20, help="Neighbor numbers for random walk sampler. Only for HAN now.")
-    parser.add_argument("--sampler", type=str, default="RandomWalk", help="sampler for minibatch, RandomWalk or MNeighbor")
     parser.add_argument("--l2norm", type=float, default=0, help="weight decay for optimizer")
+    parser.add_argument("--fanout", type=int, default=100, help="Fan-out of neighbor sampling.")
     # 损失函数相关
     parser.add_argument("--margin", type=float, default=3., help="Margin for triplet selection")
     parser.add_argument("--use_hardest_neg", default=True, action="store_true", help="whether to use hardest negative in triplet selection")

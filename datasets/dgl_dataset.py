@@ -80,7 +80,7 @@ class TwitterDataset(DGLBuiltinDataset):
             for each in user_ids:
                 G.nodes[each]['type'] = 'user'
                 G.nodes[each]['origin_index'] = ind
-                G.nodes[each]['features'] = int(each[3:])
+                G.nodes[each]['features'] = np.array([int(each[3:])])
 
             hashtags = row['hashtags']
             hashtags = list(set(['h_' + each for each in hashtags]))
