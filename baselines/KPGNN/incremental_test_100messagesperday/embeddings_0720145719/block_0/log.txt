@@ -1,0 +1,3 @@
+
+------------ Start initial training / maintaining using blocks 0 to 0 ------------
+Train: [0/16204 (0%)]	Loss: 957.874146	Average nonzero triplets: 81112.0000

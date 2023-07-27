@@ -1,0 +1,80 @@
+
+Epoch -1
+	Number of test tweets: 2549
+	Number of classes covered by test tweets: 42
+	test NMI: 0.42082251571360185
+
+Epoch 0
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.5288019373071883
+
+Epoch 1
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.567509666052038
+
+Epoch 2
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.5700009369998069
+
+Epoch 3
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.5807077729793586
+
+Epoch 4
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.5848341836205194
+
+Epoch 5
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.5841135858141745
+
+Epoch 6
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.6433782161075653
+
+Epoch 7
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.622241251565648
+
+Epoch 8
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.6410075044896141
+
+Epoch 9
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.6482038927337557
+
+Epoch 10
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.6350291102480078
+
+Epoch 11
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.6417670420158057
+
+Epoch 12
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.6393037180740769
+
+Epoch 13
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.6607250124691821
+
+Epoch 14
+	Number of validation tweets: 509
+	Number of classes covered by validation tweets: 37
+	validation NMI: 0.6504349473876914

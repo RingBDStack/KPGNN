@@ -1,0 +1,5 @@
+
+Epoch -1
+	Number of test tweets: 1972
+	Number of classes covered by test tweets: 40
+	test NMI: 0.6238828878534649

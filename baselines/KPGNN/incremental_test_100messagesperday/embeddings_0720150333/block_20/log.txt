@@ -1,0 +1,4 @@
+
+------------ Directly predict on block 20 ------------
+
+Direct prediction took 0.19 seconds

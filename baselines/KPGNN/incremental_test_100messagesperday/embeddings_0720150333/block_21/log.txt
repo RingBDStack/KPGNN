@@ -1,0 +1,35 @@
+
+------------ Directly predict on block 21 ------------
+
+Direct prediction took 0.45 seconds
+------------ Start initial training / maintaining using blocks 0 to 21 ------------
+Train: [0/1928 (0%)]	Loss: 438.983521	Average nonzero triplets: 333121.0000Epoch: 1/15. Average loss: 438.9835	Average nonzero triplets: 333121.0000
+This epoch took 0.44 mins
+Train: [0/1928 (0%)]	Loss: 353.874054	Average nonzero triplets: 333014.0000Epoch: 2/15. Average loss: 353.8741	Average nonzero triplets: 333014.0000
+This epoch took 0.43 mins
+Train: [0/1928 (0%)]	Loss: 295.579041	Average nonzero triplets: 332981.0000Epoch: 3/15. Average loss: 295.5790	Average nonzero triplets: 332981.0000
+This epoch took 0.44 mins
+Train: [0/1928 (0%)]	Loss: 265.885956	Average nonzero triplets: 332740.0000Epoch: 4/15. Average loss: 265.8860	Average nonzero triplets: 332740.0000
+This epoch took 0.44 mins
+Train: [0/1928 (0%)]	Loss: 213.330383	Average nonzero triplets: 332373.0000Epoch: 5/15. Average loss: 213.3304	Average nonzero triplets: 332373.0000
+This epoch took 0.44 mins
+Train: [0/1928 (0%)]	Loss: 192.732330	Average nonzero triplets: 331705.0000Epoch: 6/15. Average loss: 192.7323	Average nonzero triplets: 331705.0000
+This epoch took 0.43 mins
+Train: [0/1928 (0%)]	Loss: 159.012985	Average nonzero triplets: 331782.0000Epoch: 7/15. Average loss: 159.0130	Average nonzero triplets: 331782.0000
+This epoch took 0.43 mins
+Train: [0/1928 (0%)]	Loss: 142.372925	Average nonzero triplets: 332001.0000Epoch: 8/15. Average loss: 142.3729	Average nonzero triplets: 332001.0000
+This epoch took 0.43 mins
+Train: [0/1928 (0%)]	Loss: 112.699585	Average nonzero triplets: 331773.0000Epoch: 9/15. Average loss: 112.6996	Average nonzero triplets: 331773.0000
+This epoch took 0.43 mins
+Train: [0/1928 (0%)]	Loss: 90.961555	Average nonzero triplets: 331861.0000Epoch: 10/15. Average loss: 90.9616	Average nonzero triplets: 331861.0000
+This epoch took 0.43 mins
+Train: [0/1928 (0%)]	Loss: 81.947472	Average nonzero triplets: 331740.0000Epoch: 11/15. Average loss: 81.9475	Average nonzero triplets: 331740.0000
+This epoch took 0.43 mins
+Train: [0/1928 (0%)]	Loss: 76.655586	Average nonzero triplets: 331885.0000Epoch: 12/15. Average loss: 76.6556	Average nonzero triplets: 331885.0000
+This epoch took 0.43 mins
+Train: [0/1928 (0%)]	Loss: 64.816376	Average nonzero triplets: 332405.0000Epoch: 13/15. Average loss: 64.8164	Average nonzero triplets: 332405.0000
+This epoch took 0.43 mins
+Train: [0/1928 (0%)]	Loss: 57.917358	Average nonzero triplets: 333027.0000Epoch: 14/15. Average loss: 57.9174	Average nonzero triplets: 333027.0000
+This epoch took 0.44 mins
+Train: [0/1928 (0%)]	Loss: 50.252361	Average nonzero triplets: 333341.0000Epoch: 15/15. Average loss: 50.2524	Average nonzero triplets: 333341.0000
+This epoch took 0.43 mins
