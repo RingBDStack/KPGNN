@@ -7,6 +7,7 @@ GNN/models/classification/incremental_graph/
 GNN/models/clustering/incremental_graph
 GNN/models/clustering/HAN/incremental_graph
 GNN/models/clustering/HAN/models
+GNN/models/clustering/HAN/exp*
 GNN/models/clustering/exp*
 GNN/models/clustering/models
 datasets/Twitter/features_69612_0709_spacy_lg_zero_multiclasses_filtered.npy
