@@ -11,6 +11,7 @@ import dgl.dataloading
 from dgl.dataloading import MultiLayerNeighborSampler, NodeCollator
 from datasets.dgl_dataset import TwitterDataset
 from models.HAN import HAN, HANSampler
+from models.RGCN import EntityCluster
 from utils.metrics import AverageNonzeroTripletsMetric
 from utils.loss import OnlineTripletLoss, HardestNegativeTripletSelector, RandomNegativeTripletSelector, ClusterLoss
 import itertools
@@ -55,6 +56,13 @@ def get_feature_lbl(inputs, model, node_features, labels, device, collators=None
         gs = [collator.collate(batch)[2][0] for collator in collators]
         features = model(gs, node_features)
         lbl = labels[batch].to(device)
+    elif args.model == "RGCN":
+        input_nodes, seeds, blocks = inputs
+        blocks = [block.to(device) for block in blocks]
+        seeds = seeds["tweet"]  # we only predict the nodes with type "category"
+        batch_tic = time.time()
+        lbl = labels[seeds].to(device)
+        features = model(blocks)["tweet"]
     return features, lbl
 def train_once(args, model, loader, g, node_features, 
           labels,
@@ -66,7 +74,7 @@ def train_once(args, model, loader, g, node_features,
         batch_tic = time.time()
         features, lbl = get_feature_lbl(inputs, model, node_features, labels, 
                                         device, collators)
-        print(f"Features: {features.shape}")
+        # print(f"Features: {features.shape}")
         n_tweets, n_classes, centers, nmi = run_kmeans_in_train(features, lbl)
         tr_loss = tr_loss_fn(features, lbl)
         kl_loss = kl_loss_fn(features, centers)
@@ -103,10 +111,11 @@ def evaluate(args, model,
     extract_features = []
     extract_labels = []
     with th.no_grad():
-        for step, inputs in enumerate(loader):
-            features, labels_batch = get_feature_lbl(inputs, model, t_features, labels, device, collators)
-            extract_features.append(features.cpu().numpy())
-            extract_labels.append(labels_batch)
+        with loader.enable_cpu_affinity():
+            for step, inputs in enumerate(loader):
+                features, labels_batch = get_feature_lbl(inputs, model, t_features, labels, device, collators)
+                extract_features.append(features.cpu().numpy())
+                extract_labels.append(labels_batch)
     
     extract_features = th.Tensor(np.concatenate(extract_features))
     extract_labels = th.Tensor(np.concatenate(extract_labels))
@@ -162,6 +171,16 @@ def construct_model(args, graph, category="tweet", init_dim=0):
             encoder=args.encoder,
             dropout=args.dropout,
         )
+    elif model_type == "RGCN":
+        model = EntityCluster(
+            graph,
+            args.n_hidden,
+            args.n_output,
+            num_bases=args.n_bases,
+            num_hidden_layers=args.n_layers - 2,
+            dropout=args.dropout,
+            use_self_loop=args.use_self_loop,
+        )
     else:
         raise ValueError("Unimplemented model.")
     return model
@@ -193,6 +212,19 @@ def construct_loader(args, g, device, seeds):
         sampler = MultiLayerNeighborSampler([args.fanout])
         collators = [NodeCollator(mg, seeds, sampler) for mg in mgs]
         loader = DataLoader(seeds, batch_size=args.batch_size, shuffle=True, drop_last=True)
+    elif sampler_type == "RGCN":
+        sampler = dgl.dataloading.MultiLayerNeighborSampler(
+            [args.fanout] * args.n_layers
+        )
+        loader = dgl.dataloading.DataLoader(
+            g,
+            {"tweet": seeds},
+            sampler,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=0,
+            drop_last=True
+        )
     else:
         raise ValueError("Unimplemented dataloader.")
     return loader, collators
@@ -214,10 +246,10 @@ def train_process(args, split):
     train_idx = th.nonzero(train_mask, as_tuple=False).squeeze()
     labels = g.nodes[category].data.pop("labels")
     t_features = g.nodes[category].data["features"].to(th.float32)
-    node_features = {ntype: g.nodes[ntype].data["features"].to(th.float32) for ntype in g.ntypes}
-    if not args.model == "MAGNN":
+    if args.model == "MAGNN":
+        node_features = {ntype: g.nodes[ntype].data["features"].to(th.float32) for ntype in g.ntypes}
+    else:
         node_features = t_features
-    
     save_path = args.save_path
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -246,7 +278,7 @@ def train_process(args, split):
     labels = labels.to(device)
     train_idx = train_idx.to(device)
     val_idx = val_idx.to(device)
-    t_features = t_features.to(device)
+    node_features = node_features.to(device)
     model = model.to(device)
 
     total_params = sum(p.numel() for p in model.parameters())
@@ -286,9 +318,10 @@ def train_process(args, split):
     # record validation nmi of all epochs before early stop
     all_vali_nmi = []
     for epoch in range(args.n_epochs):
-        train_once(args, model, loader, g, node_features, labels, 
-                   tr_loss_fn, kl_loss_fn, optimizer, metrics,
-                   epoch, device=device, collators=collators)
+        with loader.enable_cpu_affinity():
+            train_once(args, model, loader, g, node_features, labels, 
+                    tr_loss_fn, kl_loss_fn, optimizer, metrics,
+                    epoch, device=device, collators=collators)
         val_nmi = evaluate(
             args, 
             model,
@@ -326,59 +359,44 @@ def train_process(args, split):
             break
 
 def infer_process(args, split):
-    dataset = TwitterDataset("./datasets/incremental_graph/", split=split)
+    dataset = TwitterDataset(args.graph_path, split=split, raw_dir=args.data_path)
 
     g = dataset[0]
-    category = dataset.predict_category
-    metapath_list = [["t-u", "u-t"], ["t-w", "w-t"], ["t-h", "h-t"], ["t-e", "e-t"]]
-    # print(g.number_of_nodes())
+    print(g.number_of_nodes(), g.number_of_edges())
     if g.number_of_nodes() < 10:
         return
-    num_classes = dataset.num_classes
+
+    # Organize data from graph to node vectors
+    category = dataset.predict_category
     train_mask = g.nodes[category].data.pop("train_mask")
-    # test_mask = g.nodes[category].data.pop("test_mask")
     train_idx = th.nonzero(train_mask, as_tuple=False).squeeze()
-    test_idx = train_idx[:]
-    # test_idx = th.nonzero(test_mask, as_tuple=False).squeeze()
     labels = g.nodes[category].data.pop("labels")
     t_features = g.nodes[category].data["features"].to(th.float32)
-    save_path = os.path.join(args.save_path, "HAN")
-
-    category_id = len(g.ntypes)
-    for i, ntype in enumerate(g.ntypes):
-        if ntype == category:
-            category_id = i
-    
-    # split dataset into train, validate, test
-    if args.validation:
-        val_idx = train_idx[: len(train_idx) // 5]
-        train_idx = train_idx[len(train_idx) // 5 :]
+    if args.model == "MAGNN":
+        node_features = {ntype: g.nodes[ntype].data["features"].to(th.float32) for ntype in g.ntypes}
     else:
-        val_idx = train_idx
-    num_neighbors = args.num_neighbors
-    # check cuda
+        node_features = t_features
+
+    save_path = args.save_path
+
+    # minibatch sampler and data loader
+    device = "cpu"
     use_cuda = args.gpu >= 0 and th.cuda.is_available()
     if use_cuda:
-        th.cuda.set_device(args.gpu)
         device = "cuda:%d" % args.gpu
-        g = g.to("cuda:%d" % args.gpu)
-        labels = labels.cuda()
-        train_idx = train_idx.cuda()
-        val_idx = val_idx.cuda()
-        t_features = t_features.cuda()
-    else:
-        device = "cpu"
+    loader, collators = construct_loader(args, g, device, train_idx)
+    
     # create model
     # meta_paths, in_size, hidden_size, out_size, num_heads, dropout
-    model = HAN(
-        g,
-        num_metapath=len(metapath_list),
-        embed_size=t_features.shape[1],
-        hidden_size=args.n_hidden,
-        out_size=args.n_output,
-        num_heads=args.n_heads,
-        dropout=args.dropout,
-    )
+    model = construct_model(args, g, init_dim=t_features.shape[1])
+
+    # check cuda
+    g = g.to(device)
+    labels = labels.to(device)
+    train_idx = train_idx.to(device)
+    node_features = node_features.to(device)
+    model = model.to(device)
+
     total_params = sum(p.numel() for p in model.parameters())
     print("total_params: {:d}".format(total_params))
     total_trainable_params = sum(
@@ -386,24 +404,21 @@ def infer_process(args, split):
     )
     print("total trainable params: {:d}".format(total_trainable_params))
 
+    # Load Parameters in last message block
     if not split==0:
         last_model_path = os.path.join(save_path, "models", str(split-1), "best.pt")
         model.load_state_dict(th.load(last_model_path), strict=True)
 
-    if use_cuda:
-        model.cuda()
-
     val_nmi = evaluate(
+        args, 
         model,
         g,
-        metapath_list,
-        num_neighbors,
-        t_features,
+        node_features,
         labels,
-        test_idx,
+        train_idx,
         args.batch_size,
         -1, 
-        is_validation=False,
+        is_validation=True,
         save_path=save_path,
         device=device)
 
@@ -445,11 +460,14 @@ if __name__ == "__main__":
     parser.add_argument("--n-heads", type=int, default=8, help="number of attention heads",)
     parser.add_argument('--attn-vec-dim', type=int, default=128, help='Dimension of the attention vector. Default is 128.')
     parser.add_argument('--encoder', default='linear', choices=["linear", "means"], help='Type of the aggregator. Default is Linear.')
+    parser.add_argument("--n-bases", type=int, default=-1, help="number of filter weight matrices, default: -1 [use all]",)
+    parser.add_argument("--use-self-loop", default=False, action="store_true", help="include self feature as a special relation",)
+
     # 训练相关
     parser.add_argument("--dropout", type=float, default=0, help="dropout probability")
     parser.add_argument("-e", "--n-epochs", type=int, default=200, help="number of training epochs")
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
-    parser.add_argument("--patience", type=int, default=10, help="Patience for early stopping.")
+    parser.add_argument("--patience", type=int, default=3, help="Patience for early stopping.")
     parser.add_argument("--gpu", type=int, default=-1, help="gpu")
     parser.add_argument("--batch-size", type=int, default=100, help="Mini-batch size. If -1, use full graph training.",    )
     parser.add_argument("--num_neighbors", type=int, default=20, help="Neighbor numbers for random walk sampler. Only for HAN now.")
